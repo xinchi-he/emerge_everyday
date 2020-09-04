@@ -19,6 +19,7 @@ var duration int
 var emerges map[int]int
 var packages map[string]int
 var monthlyEmerges map[string]int
+var monthlyEmergesDurations map[string]int
 var verbose bool
 
 func main() {
@@ -46,6 +47,7 @@ func copyLog() bool {
 func parseLog(filename string) {
 	emerges = make(map[int]int)
 	packages = make(map[string]int)
+	isWorld := false
 
 	file, err := os.Open(filename)
 	if err != nil {
@@ -63,13 +65,19 @@ func parseLog(filename string) {
 			if err != nil {
 				log.Fatal(err)
 			}
+		} else if strings.Contains(scanner.Text(), "@world") {
+			isWorld = true
 		} else if strings.Contains(scanner.Text(), "terminating") {
 			end, err := strconv.Atoi(strings.Split(splits[0], ":")[0])
 			if err != nil {
 				log.Fatal(err)
 			}
 			duration = end - start
-			emerges[start] = duration
+			if isWorld {
+				emerges[start] = duration
+			}
+
+			isWorld = false //reset the flag
 		} else if strings.Contains(scanner.Text(), ">>>") && strings.Contains(scanner.Text(), "emerge") {
 			packageName := splits[7]
 			pName := ""
@@ -97,6 +105,7 @@ func parseLog(filename string) {
 
 func printDictionary(dictionary map[int]int, timezone string) {
 	monthlyEmerges = make(map[string]int)
+	monthlyEmergesDurations = make(map[string]int)
 
 	loc, _ := time.LoadLocation(timezone)
 
@@ -124,6 +133,8 @@ func printDictionary(dictionary map[int]int, timezone string) {
 			monthlyEmerges[dateIndex] = 1
 		}
 
+		monthlyEmergesDurations[dateIndex] += dictionary[k]
+
 		if verbose {
 			if dictionary[k] < 60 {
 				fmt.Println(fmt.Sprintf("Started at: %s, duration: %d sec(s)", tm, dictionary[k]))
@@ -136,17 +147,20 @@ func printDictionary(dictionary map[int]int, timezone string) {
 
 	}
 
-	fmt.Println("********* Monthly Emerges **********")
+	fmt.Println("********* Monthly @world Emerges **********")
 	for _, v := range rankByWordCount(monthlyEmerges) {
-		fmt.Println(fmt.Sprintf("%s,  emerges: %d", v.Key, v.Value))
+		fmt.Println(fmt.Sprintf("%s, emerges: %d, duration: %d hr(s)", v.Key, v.Value, monthlyEmergesDurations[v.Key]/3600))
 	}
 
 	fmt.Println()
 
-	fmt.Println("********** Top Emerged Packages (more than 10 times) **********")
+	fmt.Println("********** Top 20 Frequent Updated Packages **********")
+	counter := 0
+
 	for _, v := range rankByWordCount(packages) {
-		if v.Value >= 10 {
+		if counter < 20 {
 			fmt.Println(v.Key, v.Value)
+			counter++
 		}
 	}
 
